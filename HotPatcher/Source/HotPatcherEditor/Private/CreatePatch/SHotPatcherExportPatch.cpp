@@ -400,13 +400,12 @@ bool SHotPatcherExportPatch::CanExportPatch()const
 		bool bHasVersionId = !ExportPatchSetting->GetVersionId().IsEmpty();
 		bool bHasFilter = !!ExportPatchSetting->GetAssetIncludeFiltersPaths().Num();
 		bool bHasSpecifyAssets = !!ExportPatchSetting->GetIncludeSpecifyAssets().Num();
-		bool bHasExternFiles = !!ExportPatchSetting->GetAddExternFiles().Num();
-		bool bHasExDirs = !!ExportPatchSetting->GetAddExternDirectory().Num();
+		bool bHasExternaAssetsToPlatform = !!ExportPatchSetting->GetAddExternAssetsToPlatform().Num();
 		bool bHasSavePath = !ExportPatchSetting->GetSaveAbsPath().IsEmpty();
 		bool bHasPakPlatfotm = !!ExportPatchSetting->GetPakTargetPlatforms().Num();
 
 		bool bHasAnyPakFiles = (
-			bHasFilter || bHasSpecifyAssets || bHasExternFiles || bHasExDirs ||
+			bHasFilter || bHasSpecifyAssets || bHasExternaAssetsToPlatform ||
 			ExportPatchSetting->IsIncludeEngineIni() ||
 			ExportPatchSetting->IsIncludePluginIni() ||
 			ExportPatchSetting->IsIncludeProjectIni()
@@ -431,16 +430,15 @@ bool SHotPatcherExportPatch::CanPreviewPatch() const
 {
 	bool bHasFilter = !!ExportPatchSetting->GetAssetIncludeFiltersPaths().Num();
 	bool bHasSpecifyAssets = !!ExportPatchSetting->GetIncludeSpecifyAssets().Num();
-	bool bHasExternFiles = !!ExportPatchSetting->GetAddExternFiles().Num();
-	bool bHasExDirs = !!ExportPatchSetting->GetAddExternDirectory().Num();
+	bool bHasExternaAssetsToPlatform = !!ExportPatchSetting->GetAddExternAssetsToPlatform().Num();
 	bool bHasAnyPakFiles = (
-		bHasFilter || bHasSpecifyAssets || bHasExternFiles || bHasExDirs ||
+		bHasFilter || bHasSpecifyAssets || bHasExternaAssetsToPlatform ||
 		ExportPatchSetting->IsIncludeEngineIni() ||
 		ExportPatchSetting->IsIncludePluginIni() ||
 		ExportPatchSetting->IsIncludeProjectIni()
 		);
 
-	return bHasFilter || bHasSpecifyAssets || bHasExternFiles || bHasExDirs || bHasAnyPakFiles;
+	return bHasFilter || bHasSpecifyAssets || bHasExternaAssetsToPlatform || bHasAnyPakFiles;
 }
 
 
