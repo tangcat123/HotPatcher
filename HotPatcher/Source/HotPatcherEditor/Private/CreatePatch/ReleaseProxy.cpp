@@ -1,4 +1,4 @@
-﻿#include "CreatePatch/ReleaseProxy.h"
+#include "CreatePatch/ReleaseProxy.h"
 #include "CreatePatch/ScopedSlowTaskContext.h"
 #include "FHotPatcherVersion.h"
 #include "FlibPatchParserHelper.h"
@@ -130,6 +130,77 @@ bool UReleaseProxy::DoExport()
 			}
 		}
 	}
+	UnrealPakSlowTask->Final();
+	return bRetStatus;
+}
+
+
+bool UReleaseProxy::DoExportCurCookRelease()
+{
+	// 加载之前的Cook列表
+
+
+
+	bool bRetStatus = false;
+
+	float AmountOfWorkProgress = 4.0f;
+	// FScopedSlowTask UnrealPakSlowTask(AmountOfWorkProgress);
+	// UnrealPakSlowTask.MakeDialog();
+	UScopedSlowTaskContext* UnrealPakSlowTask = NewObject<UScopedSlowTaskContext>();
+	UnrealPakSlowTask->init(AmountOfWorkProgress);
+
+	FHotPatcherVersion ExportVersion;
+	{
+		FText DiaLogMsg = FText::Format(NSLOCTEXT("AnalysisRelease", "AnalysisReleaseVersionInfo", "Analysis Release {0} Assets info."), FText::FromString(GetSettingObject()->GetVersionId()));
+		UnrealPakSlowTask->EnterProgressFrame(1.0, DiaLogMsg);
+		ExportVersion = UFlibPatchParserHelper::ExportReleaseVersionInfo(
+			"CurCookVersion",
+			TEXT(""),
+			FDateTime::UtcNow().ToString(),
+			GetSettingObject()->GetAssetIncludeFiltersPaths(),
+			GetSettingObject()->GetAssetIgnoreFiltersPaths(),
+			GetSettingObject()->GetAssetRegistryDependencyTypes(),
+			GetSettingObject()->GetSpecifyAssets(),
+			GetSettingObject()->GetAddExternAssetsToPlatform(),
+			GetSettingObject()->IsIncludeHasRefAssetsOnly(),
+			GetSettingObject()->IsAnalysisFilterDependencies()
+		);
+	}
+
+	FString SaveVersionDir = FPaths::Combine(*FPaths::ProjectDir(), FString("CurCookRelease.json"));
+
+	// save release asset info
+	{
+		FText DiaLogMsg = FText::Format(NSLOCTEXT("ExportReleaseJson", "ExportReleaseVersionInfoJson", "Export Release {0} Assets info to file."), FText::FromString(GetSettingObject()->GetVersionId()));
+		UnrealPakSlowTask->EnterProgressFrame(1.0, DiaLogMsg);
+		FString SaveToJson;
+		if (UFlibPatchParserHelper::TSerializeStructAsJsonString(ExportVersion, SaveToJson))
+		{
+
+			FString SaveToFile = SaveVersionDir;
+
+			bool runState = UFLibAssetManageHelperEx::SaveStringToFile(SaveToFile, SaveToJson);
+			if (runState)
+			{
+				auto Message = LOCTEXT("ExportReleaseSuccessNotification", "Succeed to export HotPatcher Release Version.");
+				if (IsRunningCommandlet())
+				{
+					OnShowMsg.Broadcast(Message.ToString());
+				}
+				else
+				{
+					UFlibHotPatcherEditorHelper::CreateSaveFileNotify(Message, SaveToFile);
+				}
+
+			}
+			UE_LOG(LogHotPatcher, Log, TEXT("HotPatcher Export RELEASE is %s."), runState ? TEXT("Success") : TEXT("FAILD"));
+		}
+	}
+
+
+	// 进行Diff
+
+
 	UnrealPakSlowTask->Final();
 	return bRetStatus;
 }

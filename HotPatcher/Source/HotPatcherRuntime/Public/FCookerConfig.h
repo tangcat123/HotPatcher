@@ -27,4 +27,6 @@ public:
 	TArray<FString> CookSettings;
 	UPROPERTY(EditAnywhere)
 	FString Options;
+	UPROPERTY(EditAnywhere)
+	bool IncCook = false;
 };

@@ -1803,3 +1803,8 @@ void UFlibPatchParserHelper::AnalysisWidgetTree(FPatchVersionDiff& PakDiff,int32
 	}
 }
 
+FString UFlibPatchParserHelper::GetCurCookReleaseJsonFile()
+{
+	return FPaths::Combine(*FPaths::ProjectDir(), FString("CurCookRelease.json"));
+}
+

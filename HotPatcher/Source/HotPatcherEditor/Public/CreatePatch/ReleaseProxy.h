@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "CreatePatch/FExportReleaseSettings.h"
 #include "HotPatcherProxyBase.h"
 // ENGINE HEADER
@@ -14,6 +14,9 @@ public:
     GENERATED_BODY()
 
     bool DoExport();
+
+    bool DoExportCurCookRelease();
+
     FORCEINLINE bool IsRunningCommandlet()const{return ::IsRunningCommandlet();}
     FORCEINLINE virtual FExportReleaseSettings* GetSettingObject()override
     {
