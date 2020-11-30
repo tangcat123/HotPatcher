@@ -167,7 +167,7 @@ bool UReleaseProxy::DoExportCurCookRelease()
 		);
 	}
 
-	FString SaveVersionDir = FPaths::Combine(*FPaths::ProjectDir(), FString("CurCookRelease.json"));
+	FString SaveVersionDir = UFlibPatchParserHelper::GetCurCookReleaseJsonFile();
 
 	// save release asset info
 	{

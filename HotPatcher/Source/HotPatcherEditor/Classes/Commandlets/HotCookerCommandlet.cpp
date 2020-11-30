@@ -16,6 +16,10 @@
 #include "ETargetPlatform.h"
 
 #define COOKER_CONFIG_PARAM_NAME TEXT("-config=")
+#define COOKER_CONFIG_PARAM_TARGETPLATFORM TEXT("-TargetPlatform=")
+
+#define IncCookReleaseSettingConfigFile "HotCookerConfig/IncCookReleaseSettingConfig.json"
+#define IncCookPatchSettingConfigFile "HotCookerConfig/IncCookPatchSettingConfig.json"
 
 DEFINE_LOG_CATEGORY(LogHotCookerCommandlet);
 
@@ -39,18 +43,6 @@ void ReceiveOutputMsg(const FString& InMsg)
 	}
 }
 
-void OnProcSuccess()
-{
-	// 成功之后生成对应的Cook文件列表
-	UE_LOG(LogHotCookerCommandlet, Display, TEXT("ProcSuccess"));
-
-	// 导出当前Cook资源列表
-	//UReleaseProxy* ReleaseProxy = NewObject<UReleaseProxy>();
-	//ReleaseProxy->AddToRoot();
-	//ReleaseProxy->SetProxySettings(ExportReleaseSettings.Get());
-	//ReleaseProxy->DoExportCurCookRelease();
-}
-
 template<typename TStructType>
 void LoadFileToSetting(FString LoadFile, TSharedPtr<TStructType> SettingPtr)
 {
@@ -64,6 +56,19 @@ void LoadFileToSetting(FString LoadFile, TSharedPtr<TStructType> SettingPtr)
 
 }
 
+void OnProcSuccess()
+{
+	// 成功之后生成对应的Cook文件列表
+	UE_LOG(LogHotCookerCommandlet, Display, TEXT("ProcSuccess"));
+
+	TSharedPtr<FExportReleaseSettings> ExportReleaseSettings = MakeShareable(new FExportReleaseSettings);
+	LoadFileToSetting<FExportReleaseSettings>(IncCookReleaseSettingConfigFile, ExportReleaseSettings);
+	UReleaseProxy* ReleaseProxy = NewObject<UReleaseProxy>();
+	ReleaseProxy->AddToRoot();
+	ReleaseProxy->SetProxySettings(ExportReleaseSettings.Get());
+	ReleaseProxy->DoExportCurCookRelease();
+}
+
 int32 UHotCookerCommandlet::Main(const FString& Params)
 {
 	UE_LOG(LogHotCookerCommandlet, Display, TEXT("UHotCookerCommandlet::Main"));
@@ -74,6 +79,9 @@ int32 UHotCookerCommandlet::Main(const FString& Params)
 		UE_LOG(LogHotCookerCommandlet, Error, TEXT("UHotCookerCommandlet error: not -config=xxxx.json params."));
 		return -1;
 	}
+
+	FString TargetPlatformFromCmdLine;
+	bStatus = FParse::Value(*Params, *FString(COOKER_CONFIG_PARAM_TARGETPLATFORM).ToLower(), TargetPlatformFromCmdLine);
 
 	config_path = FPaths::Combine(*FPaths::ProjectDir(), config_path);
 
@@ -90,16 +98,57 @@ int32 UHotCookerCommandlet::Main(const FString& Params)
 		FCookerConfig CookConfig;
 		UFlibPatchParserHelper::TDeserializeJsonStringAsStruct(JsonContent, CookConfig);
 
+		if(!TargetPlatformFromCmdLine.IsEmpty())
+		{
+			CookConfig.CookPlatforms.Empty();
+
+			FString PlatformStr = TargetPlatformFromCmdLine;
+			{
+				TArray<FString> PlatformNames;
+				PlatformStr.ParseIntoArray(PlatformNames, TEXT("+"), true);
+				CookConfig.CookPlatforms.Append(PlatformNames);
+			}
+
+		}
+
+		auto TheadCookByCookConfig = [&CookConfig]()
+		{
+			if (CookConfig.bCookAllMap)
+			{
+				CookConfig.CookMaps = UFlibPatchParserHelper::GetAvailableMaps(UKismetSystemLibrary::GetProjectDirectory(), false, false, true);
+			}
+			FString CookCommand;
+			UFlibPatchParserHelper::GetCookProcCommandParams(CookConfig, CookCommand);
+
+			UE_LOG(LogHotCookerCommandlet, Display, TEXT("CookCommand:%s %s"), *CookConfig.EngineBin, *CookCommand);
+
+			if (FPaths::FileExists(CookConfig.EngineBin) && FPaths::FileExists(CookConfig.ProjectPath))
+			{
+				CookerProc = MakeShareable(new FProcWorkerThread(TEXT("CookThread"), CookConfig.EngineBin, CookCommand));
+				CookerProc->ProcOutputMsgDelegate.AddStatic(&::ReceiveOutputMsg);
+				CookerProc->ProcSuccessedDelegate.AddStatic(&::OnProcSuccess);
+				CookerProc->Execute();
+				CookerProc->Join();
+			}
+		};
+
 		if(CookConfig.IncCook)
 		{
-			TSharedPtr<FExportReleaseSettings> ExportReleaseSettings = MakeShareable(new FExportReleaseSettings);
 			TSharedPtr<FExportPatchSettings> ExportPatchSettings = MakeShareable(new FExportPatchSettings);
-			FString IncCookReleaseSettingConfigFile = "IncCookReleaseSettingConfig.json";
-			FString IncCookPatchSettingConfigFile = "IncCookPatchSettingConfig.json";
-
-			LoadFileToSetting<FExportReleaseSettings>(IncCookReleaseSettingConfigFile, ExportReleaseSettings);
 			LoadFileToSetting<FExportPatchSettings>(IncCookPatchSettingConfigFile, ExportPatchSettings);
 			ExportPatchSettings->bByBaseVersion = true;
+
+			FString CurReleaseJsonFile = UFlibPatchParserHelper::GetCurCookReleaseJsonFile();
+			if (!FPaths::FileExists(CurReleaseJsonFile))
+			{
+				// 首次Cook
+				TheadCookByCookConfig();
+
+				OnProcSuccess();
+
+				return 0;
+			}
+
 			ExportPatchSettings->BaseVersion.FilePath = UFlibPatchParserHelper::GetCurCookReleaseJsonFile();
 
 			TArray<FString> IncCookAssets;
@@ -148,27 +197,12 @@ int32 UHotCookerCommandlet::Main(const FString& Params)
 				}
 
 			}
+			OnProcSuccess();
 		}
 
 		else
 		{
-			if (CookConfig.bCookAllMap)
-			{
-				CookConfig.CookMaps = UFlibPatchParserHelper::GetAvailableMaps(UKismetSystemLibrary::GetProjectDirectory(), false, false, true);
-			}
-			FString CookCommand;
-			UFlibPatchParserHelper::GetCookProcCommandParams(CookConfig, CookCommand);
-
-			UE_LOG(LogHotCookerCommandlet, Display, TEXT("CookCommand:%s %s"), *CookConfig.EngineBin, *CookCommand);
-
-			if (FPaths::FileExists(CookConfig.EngineBin) && FPaths::FileExists(CookConfig.ProjectPath))
-			{
-				CookerProc = MakeShareable(new FProcWorkerThread(TEXT("CookThread"), CookConfig.EngineBin, CookCommand));
-				CookerProc->ProcOutputMsgDelegate.AddStatic(&::ReceiveOutputMsg);
-				CookerProc->ProcSuccessedDelegate.AddStatic(&::OnProcSuccess);
-				CookerProc->Execute();
-				CookerProc->Join();
-			}
+			TheadCookByCookConfig();
 		}
 
 			
